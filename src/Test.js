@@ -9125,97 +9125,125 @@ const Test = () => {
    
   )
   
-const [combinedFlightData, setCombinedFlightData] = useState([]);
 
-const mergeFlightData = (data) => {
-    const flightDetails = data.airFlightDetailsList.airFlightDetails;
-    const segments = data.airAirSegmentList.airAirSegment;
-  
-    // Check if flightDetails and segments exist
-    if (!flightDetails || !segments) {
-      console.error("Flight details or segments are missing.");
-      return [];
-    }
-  
-    // Create a dictionary of flight details based on the key
-    const flightDetailsMap = flightDetails.reduce((map, flight) => {
-      const flightKey = flight["@attributes"]?.Key;
-      if (flightKey) {
-        map[flightKey] = flight["@attributes"];
-      }
-      return map;
-    }, {});
-  
-    // Merge flight details with segments based on the flight key reference
-    const mergedData = segments.map(segment => {
-      const flightDetailsRef = segment?.airFlightDetailsRef?.["@attributes"];
-      const flightKey = flightDetailsRef?.Key;
-  
-      if (flightKey && flightDetailsMap[flightKey]) {
-        return {
-          ...segment["@attributes"],
-          flightDetails: flightDetailsMap[flightKey]
-        };
-      }
-  
-      return {
-        ...segment["@attributes"],
-        flightDetails: {} 
-      };
-    });
-  
-    // Now we need to structure the data by flights
-    const flightObjects = [];
-  
-    mergedData.forEach((segment, index) => {
-      // Handle the direct flights
-      if (segment.Origin === "DEL" && segment.Destination === "BOM") {
-        flightObjects.push({
-          flightDetails: [segment.flightDetails],
-          segments: [segment],
-          fareInfo: [], // Assuming you have fareInfo logic
-          routes: [],   // Assuming you have routes logic
-          airPrice: []  // Assuming you have airPrice logic
-        });
-      }
-  
-      // Handle connecting flights (e.g., DEL -> AMD -> BOM)
-      if (segment.Origin === "DEL" && segment.Destination !== "BOM") {
-        const nextSegment = mergedData.find(
-          nextSeg =>
-            nextSeg.Origin === segment.Destination && nextSeg.Destination === "BOM"
-        );
-  
-        if (nextSegment) {
-          // Check if the connecting flight has a valid stopover time
-          const previousArrivalTime = new Date(segment.ArrivalTime);
-          const nextDepartureTime = new Date(nextSegment.DepartureTime);
-  
-          if (nextDepartureTime > previousArrivalTime) {
-            flightObjects.push({
-              flightDetails: [segment.flightDetails, nextSegment.flightDetails],
-              segments: [segment, nextSegment],
-              fareInfo: [], // Assuming you have fareInfo logic
-              routes: [],   // Assuming you have routes logic
-              airPrice: []  // Assuming you have airPrice logic
-            });
+const [flightData, setFlightData] = useState([]);
+
+useEffect(() => {
+  const airPricePoints = data.airAirPricePointList.airAirPricePoint;
+  const airSegments = data.airAirSegmentList.airAirSegment;
+  const flightDetails=data.airFlightDetailsList.airFlightDetails;
+  const airFareinforeList=data.airFlightDetailsList.airFlightDetails;
+  console.log("flight data ",airFareinforeList);
+//   airFareInfoList.airFareInfo[0]
+  // Create an array to hold all flight options
+  const allFlights = [];
+
+  // Iterate over each price point
+  airPricePoints.forEach((pricePoint) => {
+    // console.log(pricePoint);
+    const flightOptions = pricePoint.airAirPricingInfo.airFlightOptionsList.airFlightOption;
+
+    // Ensure airOption is always an array
+    const airOptions = Array.isArray(flightOptions.airOption) 
+      ? flightOptions.airOption 
+      : [flightOptions.airOption];
+
+    airOptions.forEach((option) => {
+      const bookingInfo = option.airBookingInfo;
+      const segments = Array.isArray(bookingInfo) 
+        ? bookingInfo.map(info => info['@attributes'].SegmentRef) 
+        : [bookingInfo['@attributes'].SegmentRef];
+
+        // this is fareInfo key here find out 
+      const fareInfoRefs = Array.isArray(bookingInfo) 
+        ? bookingInfo.map(info => info['@attributes'].FareInfoRef) 
+        : [bookingInfo['@attributes'].FareInfoRef];
+        // console.log(fareInfo);
+
+
+    const flightDetail = {
+        PricingInfos: pricePoint['@attributes'],
+        airpriceInfo: {
+          FareBreakDowns: {
+            priceStatus: pricePoint['airAirPricingInfo']["@attributes"],
+            cancelPanality: pricePoint['airAirPricingInfo']["@airCancelPenalty"],
+            changePanality: pricePoint['airAirPricingInfo']["@airChangePenalty"],
+            fareinfoRef: pricePoint['airAirPricingInfo']["@airFareInfoRef"],
+            passangerType: pricePoint['airAirPricingInfo']["@airPassengerType"],
+            taxInfo: pricePoint['airAirPricingInfo']["@airTaxInfo"],
+          },
+        },
+        segments: segments.map(segKey => {
+          // Find the corresponding segment
+          const segment = airSegments.find(s => s['@attributes'].Key === segKey);
+
+          if (segment) {
+            // Check if airFlightDetailsRef and its attributes exist
+            const flightDetailsRefKey = segment.airFlightDetailsRef?.['@attributes']?.Key;
+
+            if (flightDetailsRefKey) {
+              // Find the corresponding flight details using the flight details ref key
+              const flightDetail = flightDetails.find(fd => fd['@attributes'].Key === flightDetailsRefKey);
+              
+              return {
+                ...segment,
+                flightDetails: flightDetail || null // Add flight details to each segment or null if not found
+              };
+            }
+            return segment;
           }
-        }
-      }
+          return null; // Return null if no segment is found
+        }).filter(Boolean), // Filter out any null segments
+
+
+        // required data here to airFareInfoList here based on key 
+    //     airFareInfolist: fareInfo.map(segKey => {
+    //     console.log("status of segment : ",segKey)
+
+    //     // Find the corresponding segment
+    //     const airfairein = airFareinforeList.find(s => s['@attributes'].Key === segKey);
+    //     console.log("status of segment : ",airfairein)
+
+    //     if (airfairein) {
+    //     //   // Find the corresponding flight details using the flight details ref key
+    //     //   const flightDetailsRefKey = segment.airFlightDetailsRef['@attributes'].Key;
+    //     //   const flightDetail = flightDetails.find(fd => fd['@attributes'].Key === flightDetailsRefKey);
+
+    //     //   return {
+    //     //     ...segment,
+    //     //     flightDetails: flightDetail // Add flight details to each segment
+    //     //   };
+    //     console.log("Raushan");
+    //     }
+
+    //     return airfairein;
+    //   })
+    airFareInfolist: fareInfoRefs.map(fareInfoRef => {
+        // console.log(fareInfoRef,airFareinforeList[0]['@attributes'].Key)
+        const airFareInfo = airFareinforeList.find(fare => fare['@attributes'].Key === fareInfoRef);
+        
+        return airFareInfo || null; 
+      }).filter(Boolean) 
+    
+
+
+
+      };
+
+      // Push the flight detail into allFlights array
+      allFlights.push(flightDetail);
     });
-  
-    setCombinedFlightData(...combinedFlightData,flightObjects)
-  };
-  
+  });
 
-useEffect(()=>{
-    mergeFlightData(data)
-},[data])
+  // Update the state with the combined flight data
+  setFlightData(allFlights);
+  console.log("All Flights:", allFlights);
 
-// console.log(mergedFlightData);
+}, [data]); 
+
 
   console.log("without merge data : ",data);
-  console.log("merge data : ",combinedFlightData)
+  console.log("merge data : ",flightData)
   return <div className="px-20">
    
    {
